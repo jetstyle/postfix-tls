@@ -2,13 +2,19 @@
 
 set -e
 
+[ -z "POSTFIX_EMAIL_HOST" ] && (echo "Obligatory variable POSTFIX_EMAIL_HOST is not set. Exiting."; exit 1)
+POSTFIX_EMAIL_HOST=$(echo ${POSTFIX_EMAIL_HOST}|tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+
+[ -n "$POSTFIX_ADDITIONAL_DOMAINS" ] &&
+POSTFIX_ADDITIONAL_DOMAINS=$(echo ${POSTFIX_ADDITIONAL_DOMAINS} | tr '[:upper:]' '[:lower:]' | tr " " "\n" | sort | uniq | tr "\n" " ")
+
 POSTFIX_CERT_DIR="/etc/postfix/cert"
 
 # If there are no on of necessary certs/keys - let's generate them all again
 if ! [ -s "$POSTFIX_CERT_DIR/${POSTFIX_EMAIL_HOST}.key" -a -s "$POSTFIX_CERT_DIR/${POSTFIX_EMAIL_HOST}.crt" -a -s "$POSTFIX_CERT_DIR/rootCA.pem" ]; then
-    echo "Generate mail certs for Postfix Mail Domain is ${POSTFIX_EMAIL_HOST}"
-    if ! gencert.sh ${POSTFIX_EMAIL_HOST} ${POSTFIX_ADDITIONAL_DOMAINS}; then
-        echo "gencert.sh failed to generate certificates/keys due to some error."
+    echo "Generate mail certs for Postfix Mail Domain ${POSTFIX_EMAIL_HOST}"
+    if ! gen_postfix_certs.sh ${POSTFIX_EMAIL_HOST} ${POSTFIX_ADDITIONAL_DOMAINS}; then
+        echo "gen_postfix_certs.sh failed to generate certificates/keys due to some error."
     fi
 fi
 
@@ -64,5 +70,13 @@ sed -i -r -e 's/^#submission/submission/' /etc/postfix/master.cf
 mkdir -p /var/spool/postfix
 chown root /var/spool/postfix
 chown root /var/spool/postfix/pid
+
+export DOCKER_NETWORK=$docker_network
+export DKIM_DOMAINS=${DKIM_DOMAINS}
+export DKIM_SELECTOR=${DKIM_SELECTOR}
+export DKIM_KEY_LEN=${DKIM_KEY_LEN}
+opendkim_setup.sh
+
+for i in active bounce corrupt defer deferred flush hold incoming maildrop private public saved trace; do chown postfix:root "/var/spool/postfix/$i/"; done
 
 exec $@

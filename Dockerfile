@@ -1,13 +1,18 @@
-FROM alpine:latest
+FROM alpine:edge
 LABEL Vadim Bazhov <b.vadim@jetstyle.ru>
 
-RUN	apk add --no-cache postfix ca-certificates supervisor rsyslog openssl
+RUN	apk add --no-cache postfix ca-certificates supervisor rsyslog openssl opendkim opendkim-utils \
+    && install -d /etc/supervisor.d
 
-COPY rsyslog.conf /etc/rsyslog.conf
-COPY supervisord.conf /etc/supervisord.conf
-COPY entrypoint.sh /usr/local/bin
-COPY gencert.sh /usr/local/bin/
-RUN	chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/gencert.sh
+COPY assets/rsyslog.conf /etc/rsyslog.conf
+
+COPY assets/supervisord/supervisord.conf /etc/supervisord.conf
+COPY assets/supervisord/postfix.conf assets/supervisord/rsyslog.conf /etc/supervisor.d/
+
+COPY assets/opendkim/opendkim.conf /etc/opendkim/
+COPY assets/entrypoint.sh assets/gen_postfix_certs.sh assets/opendkim/opendkim_setup.sh /usr/local/bin/
+
+RUN	chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/gen_postfix_certs.sh /usr/local/bin/opendkim_setup.sh
 
 USER root
 WORKDIR	/tmp
